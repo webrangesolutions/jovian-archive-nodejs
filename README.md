@@ -1,52 +1,93 @@
-# JovianArchive Human Design Chart Scraper - Node.js API
+# Jovian Archive Human Design Chart Scraper
 
-A Node.js API service that scrapes Human Design charts from JovianArchive website. This is a simplified API-only version that accepts birth data and returns generated chart information without database storage or frontend UI.
+A Node.js API service that generates Human Design charts by scraping data from the Jovian Archive website. This service provides a RESTful API to generate personalized Human Design charts based on birth data.
 
-## 🌟 Features
+## 🚀 Features
 
-- **Direct Chart Generation** - Generate Human Design charts via API endpoints
-- **Web Scraping** - Intelligent scraping of JovianArchive website
-- **Anti-forgery Handling** - Automatic token extraction and form submission
-- **Location Mapping** - Smart country and city autocomplete mapping
-- **Rate Limiting** - Built-in protection against abuse
-- **Comprehensive Logging** - Detailed logging for debugging
-- **Error Handling** - Robust error handling and retry mechanisms
+- **Human Design Chart Generation**: Generate complete Human Design charts with personality and design data
+- **Multiple Scraping Methods**: Uses Puppeteer (primary), Axios (fallback), and node-fetch (secondary fallback)
+- **Anti-Bot Detection Bypass**: Successfully bypasses website anti-bot measures using headless browser automation
+- **Comprehensive Chart Data**: Extracts chart properties, design data, personality data, chart images, and download data
+- **RESTful API**: Clean JSON API with proper error handling and validation
+- **Logging**: Comprehensive logging with Winston for debugging and monitoring
 
-## 🚀 Quick Start
+## 📋 Prerequisites
 
-### Prerequisites
-- Node.js 18.0.0 or higher
+- Node.js (v14 or higher)
 - npm or yarn
+- Internet connection (for scraping Jovian Archive)
 
-### Installation
+## 🛠️ Installation
 
-1. **Clone or download the project**
-```bash
-cd jovian-archive-nodejs
-```
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd jovian-archive-nodejs
+   ```
 
 2. **Install dependencies**
-```bash
-npm install
-```
+   ```bash
+   npm install
+   ```
 
-3. **Environment setup**
-```bash
-cp env.example .env
-```
+3. **Environment Setup**
+   ```bash
+   cp env.example .env
+   ```
+   
+   Edit `.env` file with your configuration:
+   ```env
+   PORT=3000
+   NODE_ENV=development
+   LOG_LEVEL=info
+   ```
 
-4. **Start the application**
-```bash
-# Development mode
-npm run dev
+## 🚀 Running the Application
 
-# Production mode
+### Development Mode
+```bash
 npm start
 ```
 
-The API will be available at `http://localhost:3000`
+### Production Mode
+```bash
+npm start
+```
 
-## 📖 API Documentation
+The server will start on `http://localhost:3000` (or your configured PORT).
+
+## ☁️ Deployment
+
+### Render.com Deployment
+
+1. **Connect your GitHub repository** to Render.com
+2. **Create a new Web Service** with these settings:
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+   - **Environment**: `Node`
+   - **Node Version**: `18` or higher
+
+3. **Environment Variables** (set in Render dashboard):
+   ```env
+   NODE_ENV=production
+   PORT=10000
+   LOG_LEVEL=info
+   ```
+
+4. **Render.com Specific Notes**:
+   - The service is optimized for Render's free tier limitations
+   - Puppeteer is configured with `--single-process` for memory efficiency
+   - Viewport is reduced to 1280x720 to save memory
+   - Automatic fallback to Axios if Puppeteer fails
+
+### Other Platforms
+
+For other deployment platforms (Heroku, Railway, etc.), ensure:
+- Node.js 18+ is available
+- Chrome/Chromium is installed (for Puppeteer)
+- Sufficient memory allocation (512MB+ recommended)
+
+## 📚 API Documentation
 
 ### Base URL
 ```
@@ -56,15 +97,109 @@ http://localhost:3000/api
 ### Endpoints
 
 #### 1. Generate Chart (POST)
-
-**POST** `/api/generate-chart`
-
 Generate a Human Design chart from birth data.
+
+**Endpoint:** `POST /api/generate-chart`
 
 **Request Body:**
 ```json
 {
-    "name": "John Doe",
+  "name": "John Smith",
+  "day": 15,
+  "month": 6,
+  "year": 1990,
+  "hour": 14,
+  "minute": 30,
+  "country": "Pakistan",
+  "city": "Peshawar",
+  "timezone_utc": false
+}
+```
+
+**Field Descriptions:**
+- `name` (string, required): Full name of the person
+- `day` (number, required): Birth day (1-31)
+- `month` (number, required): Birth month (1-12)
+- `year` (number, required): Birth year (1900-2100)
+- `hour` (number, required): Birth hour (0-23)
+- `minute` (number, required): Birth minute (0-59)
+- `country` (string, required): Birth country name
+- `city` (string, required): Birth city name
+- `timezone_utc` (boolean, required): Whether the time is in UTC (true) or local time (false)
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Chart generated successfully",
+  "data": {
+    "birth_data": {
+      "name": "John Smith",
+      "day": 15,
+      "month": 6,
+      "year": 1990,
+      "hour": 14,
+      "minute": 30,
+      "country": "Pakistan",
+      "city": "Peshawar",
+      "timezone_utc": false
+    },
+    "chart_properties": {
+      "type": "Manifesting Generator",
+      "strategy": "To Respond",
+      "not_self_theme": "Frustration",
+      "inner_authority": "Sacral",
+      "profile": "2 / 4",
+      "definition": "Single Definition",
+      "incarnation_cross": "Right Angle Cross of Eden (12/11 | 36/6)",
+      "birth_date__local_": "Jun, 15 1990, 14",
+      "birth_place": "Peshawar (Khyber Pakhtunkhwa),Pakistan",
+      "name": "John Smith"
+    },
+    "design_data": [
+      "Share: DOWNLOAD",
+      "Share:",
+      "DOWNLOAD"
+    ],
+    "personality_data": [],
+    "chart_image_url": "https://www.jovianarchive.com/content/charts/627810390000000000_.png",
+    "download_data": "eyJOYW1lIjoiSm9obiBTbWl0aCI...",
+    "generated_at": "2025-09-12T09:01:47.416Z"
+  }
+}
+```
+
+**Error Response (500):**
+```json
+{
+  "success": false,
+  "message": "Failed to generate chart",
+  "error": "Error description"
+}
+```
+
+#### 2. Health Check (GET)
+Check if the service is running.
+
+**Endpoint:** `GET /api/health`
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-09-12T09:01:47.416Z",
+  "service": "jovian-archive-scraper"
+}
+```
+
+## 🔧 Usage Examples
+
+### cURL Example
+```bash
+curl -X POST http://localhost:3000/api/generate-chart \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "John Smith",
     "day": 15,
     "month": 6,
     "year": 1990,
@@ -73,330 +208,190 @@ Generate a Human Design chart from birth data.
     "country": "Pakistan",
     "city": "Peshawar",
     "timezone_utc": false
-}
+  }'
 ```
 
-**Field Descriptions:**
-- `name` (required): Full name of the person
-- `day` (required): Birth day (1-31)
-- `month` (required): Birth month (1-12)
-- `year` (required): Birth year (1900-2100)
-- `hour` (required): Birth hour (0-23)
-- `minute` (required): Birth minute (0-59)
-- `country` (required): Birth country name
-- `city` (required): Birth city name
-- `timezone_utc` (optional): Whether birth time is already in UTC (default: false)
+### JavaScript/Node.js Example
+```javascript
+const axios = require('axios');
 
-**Success Response (200):**
-```json
-{
-    "success": true,
-    "message": "Chart generated successfully",
-    "data": {
-        "birth_data": {
-            "name": "John Doe",
-            "day": 15,
-            "month": 6,
-            "year": 1990,
-            "hour": 14,
-            "minute": 30,
-            "country": "Pakistan",
-            "city": "Peshawar",
-            "timezone_utc": false
-        },
-        "chart_properties": {
-            "type": "Generator",
-            "strategy": "To Respond",
-            "not_self_theme": "Frustration",
-            "inner_authority": "Sacral",
-            "profile": "1/3",
-            "definition": "Single Definition",
-            "incarnation_cross": "Right Angle Cross of the Sphinx",
-            "birth_date_local": "Jun, 15 1990, 14:30 (UTC + 5)",
-            "birth_place": "Peshawar, Pakistan"
-        },
-        "design_data": ["Design data array"],
-        "personality_data": ["Personality data array"],
-        "chart_image_url": "https://www.jovianarchive.com/chart-image-url",
-        "download_data": "base64-encoded-chart-data",
-        "generated_at": "2025-01-17T10:00:00.000Z"
+const generateChart = async () => {
+  try {
+    const response = await axios.post('http://localhost:3000/api/generate-chart', {
+      name: 'John Smith',
+      day: 15,
+      month: 6,
+      year: 1990,
+      hour: 14,
+      minute: 30,
+      country: 'Pakistan',
+      city: 'Peshawar',
+      timezone_utc: false
+    });
+    
+    console.log('Chart generated:', response.data);
+  } catch (error) {
+    console.error('Error:', error.response.data);
+  }
+};
+
+generateChart();
+```
+
+### Python Example
+```python
+import requests
+import json
+
+def generate_chart():
+    url = 'http://localhost:3000/api/generate-chart'
+    data = {
+        'name': 'John Smith',
+        'day': 15,
+        'month': 6,
+        'year': 1990,
+        'hour': 14,
+        'minute': 30,
+        'country': 'Pakistan',
+        'city': 'Peshawar',
+        'timezone_utc': False
     }
-}
+    
+    response = requests.post(url, json=data)
+    
+    if response.status_code == 200:
+        print('Chart generated:', response.json())
+    else:
+        print('Error:', response.json())
+
+generate_chart()
 ```
 
-#### 2. Generate Chart (GET)
+## 🏗️ Architecture
 
-**GET** `/api/generate-chart`
+### Service Architecture
+The application uses a multi-layered architecture with fallback mechanisms:
 
-Generate chart using query parameters (useful for testing).
+1. **Primary**: `JovianArchivePuppeteerService` - Uses Puppeteer for headless browser automation
+2. **Fallback 1**: `JovianArchiveService` - Uses Axios for HTTP requests
+3. **Fallback 2**: `JovianArchiveFetchService` - Uses node-fetch for HTTP requests
 
-**Query Parameters:**
-- `name` (required): Full name
-- `day` (required): Birth day
-- `month` (required): Birth month
-- `year` (required): Birth year
-- `hour` (required): Birth hour
-- `minute` (required): Birth minute
-- `country` (required): Birth country
-- `city` (required): Birth city
-- `timezone_utc` (optional): Whether birth time is in UTC
-
-**Example:**
+### Directory Structure
 ```
-GET /api/generate-chart?name=John%20Doe&day=15&month=6&year=1990&hour=14&minute=30&country=Pakistan&city=Peshawar&timezone_utc=false
-```
-
-#### 3. Alternative Endpoints
-
-- **POST** `/api/submit-birth-data` - Same as `/api/generate-chart`
-- **GET** `/api/submit-birth-data` - Same as GET `/api/generate-chart`
-
-#### 4. Health Check
-
-**GET** `/health`
-
-Check if the API is running.
-
-**Response:**
-```json
-{
-    "success": true,
-    "message": "JovianArchive Scraper API is running",
-    "timestamp": "2025-01-17T10:00:00.000Z",
-    "version": "1.0.0"
-}
+src/
+├── app.js                 # Main Express application
+├── controllers/
+│   └── chartController.js # Chart generation controller
+├── middleware/
+│   └── validation.js      # Request validation middleware
+├── routes/
+│   └── chartRoutes.js     # API routes
+├── services/
+│   ├── JovianArchiveService.js        # Axios-based scraper
+│   ├── JovianArchivePuppeteerService.js # Puppeteer-based scraper
+│   └── JovianArchiveFetchService.js   # node-fetch-based scraper
+└── utils/
+    └── logger.js          # Winston logger configuration
 ```
 
-## ⚙️ Configuration
+## 🔍 Troubleshooting
 
-### Environment Variables
+### Common Issues
 
-Create a `.env` file with these variables:
+1. **500 Internal Server Error**
+   - The service automatically tries multiple scraping methods
+   - Check logs for detailed error information
+   - Ensure internet connection is stable
 
+2. **Form Validation Errors**
+   - Ensure all required fields are provided
+   - Check that date/time values are valid
+   - Verify country and city names are spelled correctly
+
+3. **Puppeteer Issues**
+   - Ensure sufficient system resources
+   - Check if headless browser can launch
+   - Verify Chrome/Chromium is available
+
+4. **Render.com Specific Issues**
+   - **Memory Limit**: Free tier has 512MB limit - service is optimized for this
+   - **Cold Starts**: First request may take longer due to browser initialization
+   - **Timeout**: Requests may timeout on free tier - consider upgrading for production
+   - **Chrome Path**: Service automatically detects Render environment and uses correct Chrome path
+
+### Logging
+The application uses Winston for comprehensive logging. Logs include:
+- Request/response information
+- Scraping progress
+- Error details
+- Performance metrics
+
+Log level can be configured in the `.env` file:
 ```env
-# Server Configuration
-PORT=3000
-NODE_ENV=development
-
-# JovianArchive Configuration
-JOVIAN_ARCHIVE_URL=https://www.jovianarchive.com/Get_Your_Chart
-JOVIAN_ARCHIVE_MAX_RETRIES=3
-JOVIAN_ARCHIVE_SCRAPING_DELAY=2000
-JOVIAN_ARCHIVE_RATE_LIMIT_PER_MINUTE=10
-
-# Logging
-LOG_LEVEL=info
-LOG_FILE=./logs/app.log
-
-# Security
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=50
+LOG_LEVEL=info  # debug, info, warn, error
 ```
-
-### Configuration Options
-
-- **PORT**: Server port (default: 3000)
-- **NODE_ENV**: Environment (development/production)
-- **JOVIAN_ARCHIVE_URL**: JovianArchive form URL
-- **JOVIAN_ARCHIVE_MAX_RETRIES**: Maximum retry attempts
-- **JOVIAN_ARCHIVE_SCRAPING_DELAY**: Delay between requests (ms)
-- **LOG_LEVEL**: Logging level (error/warn/info/debug)
-- **RATE_LIMIT_MAX_REQUESTS**: Max requests per IP per window
 
 ## 🧪 Testing
 
-### cURL Examples
-
-#### Generate Chart (POST)
+### Manual Testing
+Use the provided test script:
 ```bash
-curl -X POST http://localhost:3000/api/generate-chart \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Jane Smith",
-    "day": 22,
-    "month": 3,
-    "year": 1985,
-    "hour": 9,
-    "minute": 15,
-    "country": "United Kingdom",
-    "city": "London",
-    "timezone_utc": false
-  }'
+node test-api.js
 ```
 
-#### Generate Chart (GET)
+### API Testing
+Test the health endpoint:
 ```bash
-curl "http://localhost:3000/api/generate-chart?name=John%20Doe&day=15&month=6&year=1990&hour=14&minute=30&country=Pakistan&city=Peshawar&timezone_utc=false"
+curl http://localhost:3000/api/health
 ```
 
-#### Health Check
-```bash
-curl http://localhost:3000/health
-```
+## 📊 Response Data Structure
 
-### JavaScript Examples
+### Chart Properties
+The `chart_properties` object contains:
+- `type`: Human Design type (Generator, Manifesting Generator, Projector, etc.)
+- `strategy`: Life strategy
+- `not_self_theme`: Not-self theme
+- `inner_authority`: Inner authority
+- `profile`: Profile (e.g., "2 / 4")
+- `definition`: Definition type
+- `incarnation_cross`: Incarnation cross
+- `birth_date__local_`: Formatted birth date
+- `birth_place`: Birth location
+- `name`: Person's name
 
-#### Generate Chart
-```javascript
-const response = await fetch('http://localhost:3000/api/generate-chart', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-    },
-    body: JSON.stringify({
-        name: 'John Doe',
-        day: 15,
-        month: 6,
-        year: 1990,
-        hour: 14,
-        minute: 30,
-        country: 'Pakistan',
-        city: 'Peshawar',
-        timezone_utc: false
-    })
-});
+### Chart Image
+The `chart_image_url` provides a direct link to the generated chart image.
 
-const result = await response.json();
-console.log(result);
-```
+### Download Data
+The `download_data` field contains base64-encoded data for downloading the chart.
 
-## 📊 Error Handling
+## 🔒 Security Considerations
 
-### Error Types
+- The service respects the target website's terms of service
+- Implements proper delays between requests
+- Uses realistic browser headers and behavior
+- Includes proper error handling and logging
 
-1. **Validation Errors (422)**: Invalid input data
-2. **Server Errors (500)**: Scraping failures, network issues
-3. **Rate Limiting (429)**: Too many requests
+## 📝 License
 
-### Error Response Format
-
-```json
-{
-    "success": false,
-    "message": "Error message describing what went wrong",
-    "error": "Detailed error information",
-    "errors": {
-        "field_name": ["Validation error message"]
-    }
-}
-```
-
-## 🔧 Technical Details
-
-### Web Scraping Implementation
-
-The service implements sophisticated web scraping:
-
-1. **Form Page Retrieval**: Gets the initial form page
-2. **Token Extraction**: Extracts anti-forgery tokens
-3. **Form Submission**: Submits birth data with proper headers
-4. **Data Parsing**: Extracts chart information from HTML response
-5. **Error Recovery**: Handles failures with retry mechanisms
-
-### Supported Locations
-
-The service includes comprehensive location mapping for:
-
-- **Countries**: Pakistan, USA, UK, Canada, Australia, India, China, Japan, Germany, France, Italy, Spain, Brazil, Mexico, Russia, and many more
-- **Cities**: Major cities in each country with proper autocomplete formatting
-
-### Rate Limiting
-
-- **50 requests per 15 minutes** per IP address
-- **2-second delay** between scraping requests
-- **Maximum 3 retries** on failure
-- **Exponential backoff** on retries
-
-## 🚀 Deployment
-
-### Production Considerations
-
-1. **Environment Variables**: Set all required environment variables
-2. **Logging**: Configure proper logging levels
-3. **SSL**: Use HTTPS in production
-4. **Rate Limiting**: Adjust rate limits based on usage
-5. **Monitoring**: Set up monitoring and alerting
-
-### Docker Deployment
-
-```dockerfile
-FROM node:18-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --only=production
-
-COPY src/ ./src/
-
-EXPOSE 3000
-
-CMD ["npm", "start"]
-```
-
-### PM2 Deployment
-
-```bash
-# Install PM2
-npm install -g pm2
-
-# Start the application
-pm2 start src/app.js --name "jovian-archive-api"
-
-# Save PM2 configuration
-pm2 save
-pm2 startup
-```
-
-## 📝 API Examples
-
-### Complete Example
-
-```bash
-# 1. Check if API is running
-curl http://localhost:3000/health
-
-# 2. Generate a chart
-curl -X POST http://localhost:3000/api/generate-chart \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Test User",
-    "day": 1,
-    "month": 1,
-    "year": 2000,
-    "hour": 12,
-    "minute": 0,
-    "country": "Pakistan",
-    "city": "Karachi",
-    "timezone_utc": false
-  }'
-
-# 3. Generate chart via GET (for testing)
-curl "http://localhost:3000/api/generate-chart?name=Test%20User&day=1&month=1&year=2000&hour=12&minute=0&country=Pakistan&city=Karachi&timezone_utc=false"
-```
+This project is for educational and personal use. Please respect the Jovian Archive website's terms of service and robots.txt file.
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly
+4. Add tests if applicable
 5. Submit a pull request
 
-## 📄 License
+## 📞 Support
 
-This project is licensed under the MIT License.
-
-## 🆘 Support
-
-For support and questions:
-
-1. Check the logs in the `logs/` directory
-2. Verify your environment configuration
-3. Test with the provided examples
-4. Check the JovianArchive website for any changes
+For issues and questions:
+1. Check the troubleshooting section
+2. Review the logs for error details
+3. Create an issue in the repository
 
 ---
 
-**JovianArchive Human Design Chart Scraper API** - Generate charts with precision and reliability. 🌟
+**Note**: This service is designed to work with the Jovian Archive website. Please ensure you comply with their terms of service and use the service responsibly.

@@ -99,3 +99,59 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Puppeteer cache and browser downloads
+.cache/
+.puppeteer/
+puppeteer-cache/
+
+# Debug files
+debug-*.js
+debug-*.log
+*.debug
+
+# Test files
+test-*.js
+test-*.html
+response.html
+
+# Build outputs
+dist/
+build/
+out/
+
+# PM2 process files
+.pm2/
+
+# Docker files
+.dockerignore
+docker-compose.override.yml
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Lock files (keep package-lock.json but ignore others)
+yarn.lock
+pnpm-lock.yaml
+
+# Local development files
+.local/
+local/
+
+# Screenshots and downloads from Puppeteer
+screenshots/
+downloads/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.pdf
+
+# API response dumps
+api-responses/
+response-dumps/
+
+# Performance monitoring
+.clinic/

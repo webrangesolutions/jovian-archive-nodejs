@@ -1,9 +1,13 @@
 const JovianArchiveService = require('../services/JovianArchiveService');
+const JovianArchivePuppeteerService = require('../services/JovianArchivePuppeteerService');
+const JovianArchiveFetchService = require('../services/JovianArchiveFetchService');
 const logger = require('../utils/logger');
 
 class ChartController {
     constructor() {
         this.jovianArchiveService = new JovianArchiveService();
+        this.jovianArchivePuppeteerService = new JovianArchivePuppeteerService();
+        this.jovianArchiveFetchService = new JovianArchiveFetchService();
     }
 
     /**
@@ -17,9 +21,9 @@ class ChartController {
 
             logger.info('Chart generation request received', { birthData });
 
-            // Scrape chart data directly
-            const result = await this.jovianArchiveService.submitBirthData(birthData);
-            console.log("results sami", result);
+            // Try Puppeteer service first (more reliable)
+            const result = await this.jovianArchivePuppeteerService.submitBirthData(birthData);
+            console.log("Puppeteer results:", result);
             if (result.success) {
                 // Check if we got actual chart data or just JavaScript
                 const chartProperties = result.data.chart_properties || {};
@@ -55,11 +59,70 @@ class ChartController {
                     });
                 }
             } else {
-                return res.status(500).json({
-                    success: false,
-                    message: 'Failed to generate chart',
-                    error: result.error,
-                });
+                // Fallback to axios service if Puppeteer fails
+                logger.warn('Puppeteer service failed, trying axios fallback', { error: result.error });
+                const fallbackResult = await this.jovianArchiveService.submitBirthData(birthData);
+                console.log("Axios fallback results:", fallbackResult);
+                
+                if (fallbackResult.success) {
+                    const chartProperties = fallbackResult.data.chart_properties || {};
+                    const designData = fallbackResult.data.design_data || [];
+                    const personalityData = fallbackResult.data.personality_data || [];
+                    const chartImageUrl = fallbackResult.data.chart_image_url || null;
+                    const downloadData = fallbackResult.data.download_data || null;
+
+                    return res.status(200).json({
+                        success: true,
+                        message: 'Chart generated successfully using axios fallback',
+                        data: {
+                            birth_data: birthData,
+                            chart_properties: chartProperties,
+                            design_data: designData,
+                            personality_data: personalityData,
+                            chart_image_url: chartImageUrl,
+                            download_data: downloadData,
+                            generated_at: new Date().toISOString()
+                        }
+                    });
+                } else {
+                    // Try fetch service as second fallback
+                    logger.warn('Axios fallback also failed, trying fetch service', { 
+                        puppeteerError: result.error, 
+                        axiosError: fallbackResult.error 
+                    });
+                    const fetchResult = await this.jovianArchiveFetchService.submitBirthData(birthData);
+                    console.log("Fetch service results:", fetchResult);
+                    
+                    if (fetchResult.success) {
+                        const chartProperties = fetchResult.data.chart_properties || {};
+                        const designData = fetchResult.data.design_data || [];
+                        const personalityData = fetchResult.data.personality_data || [];
+                        const chartImageUrl = fetchResult.data.chart_image_url || null;
+                        const downloadData = fetchResult.data.download_data || null;
+
+                        return res.status(200).json({
+                            success: true,
+                            message: 'Chart generated successfully using fetch service',
+                            data: {
+                                birth_data: birthData,
+                                chart_properties: chartProperties,
+                                design_data: designData,
+                                personality_data: personalityData,
+                                chart_image_url: chartImageUrl,
+                                download_data: downloadData,
+                                generated_at: new Date().toISOString()
+                            }
+                        });
+                    } else {
+                        return res.status(500).json({
+                            success: false,
+                            message: 'Failed to generate chart with all three methods (Puppeteer, axios, and fetch)',
+                            error: result.error,
+                            fallbackError: fallbackResult.error,
+                            fetchError: fetchResult.error
+                        });
+                    }
+                }
             }
         } catch (error) {
             logger.error('Chart generation failed', {
@@ -98,8 +161,8 @@ class ChartController {
 
             logger.info('Chart generation request received (GET)', { birthData });
 
-            // Scrape chart data directly
-            const result = await this.jovianArchiveService.submitBirthData(birthData);
+            // Try Puppeteer service first (more reliable)
+            const result = await this.jovianArchivePuppeteerService.submitBirthData(birthData);
 
             if (result.success) {
                 // Check if we got actual chart data or just JavaScript

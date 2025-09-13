@@ -135,12 +135,12 @@ class JovianArchiveService {
         // Add delay to be respectful
         await this.delay(this.scrapingDelay);
 
-        // Get proper country and city values from autocomplete
+        // Get proper country and city values from autocomplete (matching Laravel implementation)
         const country = this.getCountrySuggestion(birthData.country);
         const city = this.getCitySuggestion(birthData.city, country);
         const timezone = this.getTimezoneForCity(city);
 
-        // Map birth data to actual form field names
+        // Map birth data to actual form field names (matching Laravel implementation exactly)
         const formData = {
             '__RequestVerificationToken': token,
             'IsVariableChart': 'False',
@@ -150,7 +150,7 @@ class JovianArchiveService {
             'Year': birthData.year,
             'Hour': birthData.hour,
             'Minute': birthData.minute,
-            'Country': country,
+            'Country': country, // Send the country value like Laravel does
             'City': city,
             'Timezone': timezone,
             'IsTimeUTC': birthData.timezone_utc ? 'true' : 'false',
@@ -167,19 +167,27 @@ class JovianArchiveService {
         });
 
         try {
-            // Submit the form with proper headers (matching Laravel implementation exactly)
-            // Convert form data to URL-encoded string like Laravel's form_params does
-            const formDataString = new URLSearchParams(formData).toString();
+            // Submit the form with proper headers (matching Laravel's form_params exactly)
+            // Use axios's built-in form data handling like Laravel's form_params
+            logger.info('Form data being sent:', {
+                formData,
+                headers: {
+                    'Referer': this.baseUrl,
+                    'Origin': 'https://www.jovianarchive.com',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                }
+            });
             
-            const response = await this.client.post(this.baseUrl, formDataString, {
+            const response = await this.client.post(this.baseUrl, new URLSearchParams(formData), {
                 headers: {
                     'Referer': this.baseUrl,
                     'Origin': 'https://www.jovianarchive.com',
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
+                // Allow redirects like Laravel Guzzle
                 maxRedirects: 5,
                 validateStatus: function (status) {
-                    return status >= 200 && status < 300;
+                    return status >= 200 && status < 400; // Allow redirects like Laravel
                 },
             });
 
@@ -342,6 +350,7 @@ class JovianArchiveService {
         }
 
         // If no match found, return the original input (website might handle it)
+        // The website will auto-populate the Country field based on the City
         return cityInput;
     }
 
