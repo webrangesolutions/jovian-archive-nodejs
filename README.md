@@ -9,13 +9,17 @@ A Node.js API service that generates Human Design charts by scraping data from t
 - **Anti-Bot Detection Bypass**: Successfully bypasses website anti-bot measures using headless browser automation
 - **Comprehensive Chart Data**: Extracts chart properties, design data, personality data, chart images, and download data
 - **RESTful API**: Clean JSON API with proper error handling and validation
+- **Multiple Endpoints**: Supports both POST and GET requests for chart generation
+- **Security Features**: Rate limiting, CORS protection, helmet security headers, and input validation
 - **Logging**: Comprehensive logging with Winston for debugging and monitoring
+- **Production Ready**: Optimized for deployment on Render.com and other cloud platforms
 
 ## 📋 Prerequisites
 
-- Node.js (v14 or higher)
+- Node.js (v18 or higher) - Required for Puppeteer compatibility
 - npm or yarn
 - Internet connection (for scraping Jovian Archive)
+- Chrome/Chromium browser (for Puppeteer functionality)
 
 ## 🛠️ Installation
 
@@ -37,9 +41,23 @@ A Node.js API service that generates Human Design charts by scraping data from t
    
    Edit `.env` file with your configuration:
    ```env
+   # Server Configuration
    PORT=3000
    NODE_ENV=development
+   
+   # JovianArchive Configuration
+   JOVIAN_ARCHIVE_URL=https://www.jovianarchive.com/Get_Your_Chart
+   JOVIAN_ARCHIVE_MAX_RETRIES=3
+   JOVIAN_ARCHIVE_SCRAPING_DELAY=2000
+   JOVIAN_ARCHIVE_RATE_LIMIT_PER_MINUTE=10
+   
+   # Logging
    LOG_LEVEL=info
+   LOG_FILE=./logs/app.log
+   
+   # Security
+   RATE_LIMIT_WINDOW_MS=900000
+   RATE_LIMIT_MAX_REQUESTS=100
    ```
 
 ## 🚀 Running the Application
@@ -49,12 +67,33 @@ A Node.js API service that generates Human Design charts by scraping data from t
 npm start
 ```
 
+### Development with Auto-reload
+```bash
+npm run dev
+```
+
 ### Production Mode
 ```bash
 npm start
 ```
 
 The server will start on `http://localhost:3000` (or your configured PORT).
+
+### Testing the API
+```bash
+# Run the included test script
+node test-api.js
+
+# Or test manually
+curl http://localhost:3000/health
+```
+
+### Available Scripts
+```bash
+npm start          # Start the production server
+npm run dev        # Start development server with auto-reload
+npm test           # Run tests (Jest)
+```
 
 ## ☁️ Deployment
 
@@ -99,7 +138,7 @@ http://localhost:3000/api
 #### 1. Generate Chart (POST)
 Generate a Human Design chart from birth data.
 
-**Endpoint:** `POST /api/generate-chart`
+**Endpoint:** `POST /api/generate-chart` or `POST /api/submit-birth-data`
 
 **Request Body:**
 ```json
@@ -178,23 +217,36 @@ Generate a Human Design chart from birth data.
 }
 ```
 
-#### 2. Health Check (GET)
+#### 2. Generate Chart (GET)
+Generate a Human Design chart using query parameters (useful for testing).
+
+**Endpoint:** `GET /api/generate-chart` or `GET /api/submit-birth-data`
+
+**Query Parameters:**
+```
+?name=John Smith&day=15&month=6&year=1990&hour=14&minute=30&country=Pakistan&city=Peshawar&timezone_utc=false
+```
+
+#### 3. Health Check (GET)
 Check if the service is running.
 
-**Endpoint:** `GET /api/health`
+**Endpoint:** `GET /health`
 
 **Response:**
 ```json
 {
-  "status": "healthy",
-  "timestamp": "2025-09-12T09:01:47.416Z",
-  "service": "jovian-archive-scraper"
+  "success": true,
+  "message": "JovianArchive Scraper API is running",
+  "timestamp": "2025-01-17T10:00:00.000Z",
+  "version": "1.0.0"
 }
 ```
 
 ## 🔧 Usage Examples
 
-### cURL Example
+### cURL Examples
+
+#### POST Request
 ```bash
 curl -X POST http://localhost:3000/api/generate-chart \
   -H "Content-Type: application/json" \
@@ -209,6 +261,11 @@ curl -X POST http://localhost:3000/api/generate-chart \
     "city": "Peshawar",
     "timezone_utc": false
   }'
+```
+
+#### GET Request
+```bash
+curl "http://localhost:3000/api/generate-chart?name=John%20Smith&day=15&month=6&year=1990&hour=14&minute=30&country=Pakistan&city=Peshawar&timezone_utc=false"
 ```
 
 ### JavaScript/Node.js Example
@@ -278,20 +335,28 @@ The application uses a multi-layered architecture with fallback mechanisms:
 
 ### Directory Structure
 ```
-src/
-├── app.js                 # Main Express application
-├── controllers/
-│   └── chartController.js # Chart generation controller
-├── middleware/
-│   └── validation.js      # Request validation middleware
-├── routes/
-│   └── chartRoutes.js     # API routes
-├── services/
-│   ├── JovianArchiveService.js        # Axios-based scraper
-│   ├── JovianArchivePuppeteerService.js # Puppeteer-based scraper
-│   └── JovianArchiveFetchService.js   # node-fetch-based scraper
-└── utils/
-    └── logger.js          # Winston logger configuration
+jovian-archive-nodejs/
+├── src/
+│   ├── app.js                 # Main Express application
+│   ├── controllers/
+│   │   └── chartController.js # Chart generation controller
+│   ├── middleware/
+│   │   └── validation.js      # Request validation middleware
+│   ├── routes/
+│   │   └── chartRoutes.js     # API routes
+│   ├── services/
+│   │   ├── JovianArchiveService.js        # Axios-based scraper
+│   │   ├── JovianArchivePuppeteerService.js # Puppeteer-based scraper
+│   │   └── JovianArchiveFetchService.js   # node-fetch-based scraper
+│   └── utils/
+│       └── logger.js          # Winston logger configuration
+├── logs/                      # Application logs
+├── test-api.js               # API testing script
+├── debug-*.js                # Debug scripts
+├── package.json              # Dependencies and scripts
+├── env.example               # Environment variables template
+├── DEPLOYMENT.md             # Deployment guide
+└── README.md                 # This file
 ```
 
 ## 🔍 Troubleshooting
@@ -333,16 +398,32 @@ LOG_LEVEL=info  # debug, info, warn, error
 
 ## 🧪 Testing
 
-### Manual Testing
+### Automated Testing
 Use the provided test script:
 ```bash
 node test-api.js
 ```
 
-### API Testing
-Test the health endpoint:
+This script will test:
+- Health check endpoint
+- Root endpoint with API documentation
+- Chart generation via POST request
+- Chart generation via GET request
+- Error handling
+
+### Manual API Testing
+Test individual endpoints:
 ```bash
-curl http://localhost:3000/api/health
+# Health check
+curl http://localhost:3000/health
+
+# Root endpoint with API info
+curl http://localhost:3000/
+
+# Chart generation (POST)
+curl -X POST http://localhost:3000/api/generate-chart \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Test User","day":15,"month":6,"year":1990,"hour":14,"minute":30,"country":"Pakistan","city":"Peshawar","timezone_utc":false}'
 ```
 
 ## 📊 Response Data Structure
@@ -368,10 +449,34 @@ The `download_data` field contains base64-encoded data for downloading the chart
 
 ## 🔒 Security Considerations
 
-- The service respects the target website's terms of service
-- Implements proper delays between requests
-- Uses realistic browser headers and behavior
-- Includes proper error handling and logging
+- **Rate Limiting**: Built-in rate limiting to prevent abuse (50 requests per 15 minutes by default)
+- **CORS Protection**: Configurable CORS settings for production environments
+- **Security Headers**: Helmet.js provides security headers
+- **Input Validation**: Joi validation for request data
+- **Error Handling**: Comprehensive error handling without exposing sensitive information
+- **Respectful Scraping**: Implements proper delays between requests
+- **Terms of Service**: The service respects the target website's terms of service
+- **Realistic Behavior**: Uses realistic browser headers and behavior patterns
+
+## 📦 Dependencies
+
+### Core Dependencies
+- **express**: Web framework for Node.js
+- **puppeteer**: Headless Chrome automation for web scraping
+- **axios**: HTTP client for API requests
+- **node-fetch**: Lightweight HTTP client (fallback)
+- **cheerio**: Server-side jQuery implementation for HTML parsing
+- **winston**: Logging library
+- **joi**: Object schema validation
+- **helmet**: Security middleware
+- **cors**: Cross-Origin Resource Sharing middleware
+- **morgan**: HTTP request logger
+- **compression**: Gzip compression middleware
+- **express-rate-limit**: Rate limiting middleware
+
+### Development Dependencies
+- **nodemon**: Development server with auto-reload
+- **jest**: Testing framework
 
 ## 📝 License
 
@@ -388,9 +493,14 @@ This project is for educational and personal use. Please respect the Jovian Arch
 ## 📞 Support
 
 For issues and questions:
-1. Check the troubleshooting section
-2. Review the logs for error details
-3. Create an issue in the repository
+1. **Check the troubleshooting section** above for common solutions
+2. **Review the logs** in the `logs/` directory for detailed error information
+3. **Run the test script** (`node test-api.js`) to verify functionality
+4. **Check the deployment guide** (`DEPLOYMENT.md`) for deployment-specific issues
+5. **Create an issue** in the repository with:
+   - Error logs
+   - Request/response data (without sensitive information)
+   - Environment details (Node.js version, OS, etc.)
 
 ---
 
