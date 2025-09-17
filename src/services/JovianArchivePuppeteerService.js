@@ -77,9 +77,16 @@ class JovianArchivePuppeteerService {
             },
         };
 
-        // Add executable path for Render.com if needed
-        if (process.env.RENDER) {
-            launchOptions.executablePath = '/usr/bin/chromium-browser';
+        // Resolve executable path: prefer env var, else Puppeteer's bundled Chromium
+        try {
+            const resolvedPath =
+                process.env.PUPPETEER_EXECUTABLE_PATH ||
+                (typeof puppeteer.executablePath === 'function' ? puppeteer.executablePath() : null);
+            if (resolvedPath) {
+                launchOptions.executablePath = resolvedPath;
+            }
+        } catch (e) {
+            // If detection fails, let Puppeteer decide without executablePath
         }
         
         this.browser = await puppeteer.launch(launchOptions);
