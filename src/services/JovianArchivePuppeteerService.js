@@ -77,16 +77,25 @@ class JovianArchivePuppeteerService {
             },
         };
 
-        // Resolve executable path: prefer env var, else Puppeteer's bundled Chromium
+        // Resolve executable path safely: prefer env var, else Puppeteer's bundled Chromium
         try {
-            const resolvedPath =
+            const candidatePath =
                 process.env.PUPPETEER_EXECUTABLE_PATH ||
                 (typeof puppeteer.executablePath === 'function' ? puppeteer.executablePath() : null);
-            if (resolvedPath) {
-                launchOptions.executablePath = resolvedPath;
+
+            // Some platforms (like Render) may set a path that doesn't exist if Chromium wasn't downloaded
+            if (candidatePath) {
+                const fs = require('fs');
+                if (fs.existsSync(candidatePath)) {
+                    launchOptions.executablePath = candidatePath;
+                    logger.info('Using Puppeteer executablePath', { executablePath: candidatePath });
+                } else {
+                    logger.warn('Configured Puppeteer executablePath not found, launching without explicit path', { executablePath: candidatePath });
+                }
             }
         } catch (e) {
             // If detection fails, let Puppeteer decide without executablePath
+            logger.warn('Failed to resolve Puppeteer executablePath, relying on default', { error: e.message });
         }
         
         this.browser = await puppeteer.launch(launchOptions);

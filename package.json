@@ -5,6 +5,7 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
+    "postinstall": "node -e \"console.log('Ensuring Puppeteer Chromium is downloaded...');\" && node -e \"try{require('puppeteer');}catch(e){process.exit(0)}\"",
     "dev": "nodemon src/app.js",
     "test": "jest"
   },
