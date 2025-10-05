@@ -8,6 +8,7 @@ class JovianArchivePuppeteerService {
         this.scrapingDelay = 3000; // 3 seconds delay
         this.browser = null;
         this.page = null;
+        this.lastCapturedJson = null;
     }
 
     /**
@@ -137,6 +138,13 @@ class JovianArchivePuppeteerService {
         await this.page.waitForSelector('form', { timeout: 10000 });
         
         logger.info('Form page loaded successfully');
+
+        // Try to solve hCaptcha if enabled (optional)
+        try {
+            await this.solveHCaptchaIfPresent();
+        } catch (e) {
+            logger.warn('hCaptcha solving skipped or failed', { error: e.message });
+        }
     }
 
     /**
@@ -157,111 +165,148 @@ class JovianArchivePuppeteerService {
             selectedCity: city,
             timezone,
         });
+        
+        // Wire up JSON capture for SPA/XHR-based flows
+        this.lastCapturedJson = null;
+        const responseListener = async (res) => {
+            try {
+                const ct = (res.headers()['content-type'] || '').toLowerCase();
+                if (ct.includes('application/json')) {
+                    const url = res.url();
+                    const status = res.status();
+                    if (status >= 200 && status < 400) {
+                        const data = await res.json().catch(() => null);
+                        if (data) {
+                            this.lastCapturedJson = { url, data };
+                            logger.info('Captured JSON response', { url, keys: Object.keys(data || {}) });
+                        }
+                    }
+                }
+            } catch (e) {
+                // ignore
+            }
+        };
+        this.page.on('response', responseListener);
 
-        // Fill the form fields based on actual form structure
-        await this.page.type('input[name="Name"]', birthData.name);
-        await this.page.type('input[name="Day"]', birthData.day.toString());
-        
-        // Handle month - there's a text input for month_name and hidden input for Month
-        await this.page.type('input[id="month_name"]', birthData.month.toString());
-        await this.page.evaluate((month) => {
-            document.querySelector('input[name="Month"]').value = month;
-        }, birthData.month.toString());
-        
-        await this.page.type('input[name="Year"]', birthData.year.toString());
-        await this.page.type('input[name="Hour"]', birthData.hour.toString());
-        await this.page.type('input[name="Minute"]', birthData.minute.toString());
-        
-        // Handle country field with autocomplete dropdown
-        // Clear the field first and type with proper capitalization
-        await this.page.evaluate(() => {
-            document.querySelector('input[id="country_name"]').value = '';
-        });
-        await this.page.type('input[id="country_name"]', country);
-        await this.delay(1500); // Wait longer for autocomplete dropdown to appear
-        
-        // Try to click on the country autocomplete dropdown option
-        try {
-            await this.page.waitForSelector('.ui-autocomplete .ui-menu-item', { timeout: 3000 });
+        // Try legacy form first; if not present, use new layout fallback
+        const legacyNameField = await this.page.$('input[name="Name"]');
+        if (legacyNameField) {
+            // Legacy form flow
+            await this.page.type('input[name="Name"]', birthData.name);
+            await this.page.type('input[name="Day"]', birthData.day.toString());
             
-            // Log available autocomplete options for debugging
-            const countryOptions = await this.page.evaluate(() => {
-                const items = document.querySelectorAll('.ui-autocomplete .ui-menu-item');
-                return Array.from(items).map(item => item.textContent.trim());
+            // Handle month - there's a text input for month_name and hidden input for Month
+            await this.page.type('input[id="month_name"]', birthData.month.toString());
+            await this.page.evaluate((month) => {
+                const target = document.querySelector('input[name="Month"]');
+                if (target) target.value = month;
+            }, birthData.month.toString());
+            
+            await this.page.type('input[name="Year"]', birthData.year.toString());
+            await this.page.type('input[name="Hour"]', birthData.hour.toString());
+            await this.page.type('input[name="Minute"]', birthData.minute.toString());
+            
+            // Handle country field with autocomplete dropdown
+            // Clear the field first and type with proper capitalization
+            await this.page.evaluate(() => {
+                const el = document.querySelector('input[id="country_name"]');
+                if (el) el.value = '';
             });
-            logger.info('Available country autocomplete options', { countryOptions });
+            await this.page.type('input[id="country_name"]', country);
+            await this.delay(1500); // Wait longer for autocomplete dropdown to appear
             
-            // Try to find exact match first, then fallback to first option
-            let selected = false;
-            for (let i = 0; i < countryOptions.length; i++) {
-                if (countryOptions[i].toLowerCase().includes(country.toLowerCase())) {
-                    await this.page.click(`.ui-autocomplete .ui-menu-item:nth-child(${i + 1})`);
-                    logger.info(`Country autocomplete option selected: ${countryOptions[i]}`);
-                    selected = true;
-                    break;
+            // Try to click on the country autocomplete dropdown option
+            try {
+                await this.page.waitForSelector('.ui-autocomplete .ui-menu-item', { timeout: 3000 });
+                
+                // Log available autocomplete options for debugging
+                const countryOptions = await this.page.evaluate(() => {
+                    const items = document.querySelectorAll('.ui-autocomplete .ui-menu-item');
+                    return Array.from(items).map(item => item.textContent.trim());
+                });
+                logger.info('Available country autocomplete options', { countryOptions });
+                
+                // Try to find exact match first, then fallback to first option
+                let selected = false;
+                for (let i = 0; i < countryOptions.length; i++) {
+                    if (countryOptions[i].toLowerCase().includes(country.toLowerCase())) {
+                        await this.page.click(`.ui-autocomplete .ui-menu-item:nth-child(${i + 1})`);
+                        logger.info(`Country autocomplete option selected: ${countryOptions[i]}`);
+                        selected = true;
+                        break;
+                    }
                 }
+                
+                if (!selected) {
+                    await this.page.click('.ui-autocomplete .ui-menu-item:first-child');
+                    logger.info('Country autocomplete first option selected');
+                }
+            } catch (error) {
+                logger.warn('No country autocomplete dropdown found, using typed value');
+                // Fallback: set the hidden field manually
+                await this.page.evaluate((countryValue) => {
+                    const el = document.querySelector('input[name="Country"]');
+                    if (el) el.value = countryValue;
+                }, country);
             }
             
-            if (!selected) {
-                await this.page.click('.ui-autocomplete .ui-menu-item:first-child');
-                logger.info('Country autocomplete first option selected');
-            }
-        } catch (error) {
-            logger.warn('No country autocomplete dropdown found, using typed value');
-            // Fallback: set the hidden field manually
-            await this.page.evaluate((country) => {
-                document.querySelector('input[name="Country"]').value = country;
-            }, country);
-        }
-        
-        // Handle city field with autocomplete dropdown
-        await this.page.evaluate(() => {
-            document.querySelector('input[name="City"]').value = '';
-        });
-        await this.page.type('input[name="City"]', city);
-        await this.delay(1500); // Wait longer for autocomplete dropdown to appear
-        
-        // Try to click on the city autocomplete dropdown option
-        try {
-            await this.page.waitForSelector('.ui-autocomplete .ui-menu-item', { timeout: 3000 });
-            
-            // Log available autocomplete options for debugging
-            const cityOptions = await this.page.evaluate(() => {
-                const items = document.querySelectorAll('.ui-autocomplete .ui-menu-item');
-                return Array.from(items).map(item => item.textContent.trim());
+            // Handle city field with autocomplete dropdown
+            await this.page.evaluate(() => {
+                const el = document.querySelector('input[name="City"]');
+                if (el) el.value = '';
             });
-            logger.info('Available city autocomplete options', { cityOptions });
+            await this.page.type('input[name="City"]', city);
+            await this.delay(1500); // Wait longer for autocomplete dropdown to appear
             
-            // Try to find exact match first, then fallback to first option
-            let selected = false;
-            for (let i = 0; i < cityOptions.length; i++) {
-                if (cityOptions[i].toLowerCase().includes(city.toLowerCase())) {
-                    await this.page.click(`.ui-autocomplete .ui-menu-item:nth-child(${i + 1})`);
-                    logger.info(`City autocomplete option selected: ${cityOptions[i]}`);
-                    selected = true;
-                    break;
+            // Try to click on the city autocomplete dropdown option
+            try {
+                await this.page.waitForSelector('.ui-autocomplete .ui-menu-item', { timeout: 3000 });
+                
+                // Log available autocomplete options for debugging
+                const cityOptions = await this.page.evaluate(() => {
+                    const items = document.querySelectorAll('.ui-autocomplete .ui-menu-item');
+                    return Array.from(items).map(item => item.textContent.trim());
+                });
+                logger.info('Available city autocomplete options', { cityOptions });
+                
+                // Try to find exact match first, then fallback to first option
+                let selected = false;
+                for (let i = 0; i < cityOptions.length; i++) {
+                    if (cityOptions[i].toLowerCase().includes(city.toLowerCase())) {
+                        await this.page.click(`.ui-autocomplete .ui-menu-item:nth-child(${i + 1})`);
+                        logger.info(`City autocomplete option selected: ${cityOptions[i]}`);
+                        selected = true;
+                        break;
+                    }
                 }
+                
+                if (!selected) {
+                    await this.page.click('.ui-autocomplete .ui-menu-item:first-child');
+                    logger.info('City autocomplete first option selected');
+                }
+            } catch (error) {
+                logger.warn('No city autocomplete dropdown found, using typed value');
             }
             
-            if (!selected) {
-                await this.page.click('.ui-autocomplete .ui-menu-item:first-child');
-                logger.info('City autocomplete first option selected');
+            // Set timezone in hidden field
+            await this.page.evaluate((tz) => {
+                const el = document.querySelector('input[name="Timezone"]');
+                if (el) el.value = tz;
+            }, timezone);
+            
+            // Wait a bit for any autocomplete to work
+            await this.delay(1000);
+            
+            // Handle timezone UTC checkbox
+            if (birthData.timezone_utc) {
+                try { await this.page.check('input[name="IsTimeUTC"][type="checkbox"]'); } catch (e) {}
             }
-        } catch (error) {
-            logger.warn('No city autocomplete dropdown found, using typed value');
-        }
-        
-        // Set timezone in hidden field
-        await this.page.evaluate((timezone) => {
-            document.querySelector('input[name="Timezone"]').value = timezone;
-        }, timezone);
-        
-        // Wait a bit for any autocomplete to work
-        await this.delay(1000);
-        
-        // Handle timezone UTC checkbox
-        if (birthData.timezone_utc) {
-            await this.page.check('input[name="IsTimeUTC"][type="checkbox"]');
+        } else {
+            // New layout flow
+            const success = await this.fillNewSiteForm(birthData, country, city, timezone);
+            if (!success) {
+                throw new Error('Unable to locate new site form fields');
+            }
         }
 
         // Add delay to be respectful
@@ -290,7 +335,9 @@ class JovianArchivePuppeteerService {
             let targetForm = null;
             for (let i = 0; i < forms.length; i++) {
                 const hasNameField = await this.page.evaluate(form => {
-                    return form.querySelector('input[name="Name"]') !== null;
+                    // Legacy or new layout
+                    return form.querySelector('input[name="Name"]') !== null ||
+                           form.querySelector('input[placeholder="Name"]') !== null;
                 }, forms[i]);
                 
                 if (hasNameField) {
@@ -302,9 +349,23 @@ class JovianArchivePuppeteerService {
             
             if (targetForm) {
                 // Submit the specific chart form
-                await this.page.evaluate(form => form.submit(), targetForm);
-                await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
-                logger.info('Chart form submitted programmatically');
+                try {
+                    await this.page.evaluate(form => form.submit && form.submit(), targetForm);
+                    await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
+                    logger.info('Chart form submitted programmatically');
+                } catch (e) {
+                    // If form submission didn't navigate (SPA), try clicking a button
+                    const clicked = await this.page.evaluate(() => {
+                        const candidates = Array.from(document.querySelectorAll('button, a, input[type="submit"], input[type="button"]'));
+                        const btn = candidates.find(el => (el.textContent || el.value || '').toLowerCase().includes('create chart'));
+                        if (btn) { btn.click(); return true; }
+                        return false;
+                    });
+                    if (!clicked) {
+                        logger.warn('Create Chart button not found during fallback submit');
+                    }
+                    await this.delay(5000);
+                }
             } else {
                 throw new Error('Could not find the chart form');
             }
@@ -358,7 +419,16 @@ class JovianArchivePuppeteerService {
         }
 
         // Parse the response
-        const chartData = await this.parseChartResponse();
+        let chartData = null;
+        if (this.lastCapturedJson) {
+            chartData = this.transformCapturedJson(this.lastCapturedJson.data, birthData) || null;
+        }
+        if (!chartData) {
+            chartData = await this.parseChartResponse();
+        }
+
+        // Cleanup listener
+        this.page.off('response', responseListener);
         return chartData;
     }
 
@@ -728,3 +798,280 @@ class JovianArchivePuppeteerService {
 }
 
 module.exports = JovianArchivePuppeteerService;
+
+/**
+ * Additional helpers appended to class via prototype to avoid large refactor
+ */
+JovianArchivePuppeteerService.prototype.fillNewSiteForm = async function (birthData, country, city, timezone) {
+    const dateStr = `${String(birthData.day).padStart(2, '0')}/${String(birthData.month).padStart(2, '0')}/${birthData.year}`;
+    const timeStr = `${String(birthData.hour).padStart(2, '0')}:${String(birthData.minute).padStart(2, '0')}`;
+
+    const setInput = async (selectors, value) => {
+        const frames = this.page.frames();
+        for (const frame of frames) {
+            const ok = await frame.evaluate(async ({ selectors, value }) => {
+                const findDeep = (root, sel) => {
+                    const direct = root.querySelector(sel);
+                    if (direct) return direct;
+                    const walk = (node) => {
+                        const sr = node.shadowRoot;
+                        if (sr) {
+                            const hit = sr.querySelector(sel);
+                            if (hit) return hit;
+                            for (const child of sr.querySelectorAll('*')) {
+                                const nested = findDeep(child, sel);
+                                if (nested) return nested;
+                            }
+                        }
+                        return null;
+                    };
+                    for (const el of root.querySelectorAll('*')) {
+                        const res = walk(el);
+                        if (res) return res;
+                    }
+                    return null;
+                };
+                for (const sel of selectors) {
+                    const input = findDeep(document, sel);
+                    if (input) {
+                        input.focus && input.focus();
+                        if ('value' in input) input.value = '';
+                        input.dispatchEvent && input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.value = String(value);
+                        input.dispatchEvent && input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent && input.dispatchEvent(new Event('change', { bubbles: true }));
+                        input.blur && input.blur();
+                        return true;
+                    }
+                }
+                return false;
+            }, { selectors, value }).catch(() => false);
+            if (ok) { await this.delay(150); return true; }
+        }
+        return false;
+    };
+
+    const okName = await setInput([
+        'input[placeholder="Name"]',
+        'input[aria-label="Name"]',
+        'input[name="name"]',
+        'input[id*="name"]'
+    ], birthData.name);
+
+    const okEmail = await setInput([
+        'input[placeholder="Email"]',
+        'input[aria-label="Email"]',
+        'input[type="email"]'
+    ], (birthData.email && /@/.test(birthData.email))
+        ? birthData.email
+        : `${String(birthData.name || 'user').replace(/\s+/g, '.').toLowerCase()}@example.com`);
+
+    const okDate = await setInput([
+        'input[placeholder="DD/MM/YYYY"]',
+        'input[type="date"]',
+        'input[name*="date"]'
+    ], dateStr);
+
+    const okTime = await setInput([
+        'input[placeholder="HH:mm"]',
+        'input[type="time"]',
+        'input[name*="time"]'
+    ], timeStr);
+
+    const okCountry = await setInput([
+        'input[placeholder="Country"]',
+        'input[aria-label="Country"]',
+        'input[name*="country"]',
+        'input[id*="country"]'
+    ], country);
+
+    // Try to accept the first suggestion if a dropdown appears
+    try {
+        await this.delay(400);
+        await this.page.keyboard.press('ArrowDown');
+        await this.page.keyboard.press('Enter');
+    } catch (_) {}
+
+    const okCity = await setInput([
+        'input[placeholder="City"]',
+        'input[aria-label="City"]',
+        'input[name*="city"]',
+        'input[id*="city"]'
+    ], city);
+
+    // Try to accept the first suggestion for city as well
+    try {
+        await this.delay(400);
+        await this.page.keyboard.press('ArrowDown');
+        await this.page.keyboard.press('Enter');
+    } catch (_) {}
+
+    const filledAny = okName || okEmail || okDate || okTime || okCountry || okCity;
+    if (!filledAny) {
+        logger.warn('New layout inputs not found via placeholder/labels');
+        return false;
+    }
+
+    // Find and click Create Chart across frames
+    let clicked = false;
+    const frames = this.page.frames();
+    for (const frame of frames) {
+        const didClick = await frame.evaluate(async () => {
+            const findDeepButton = () => {
+                const matches = (el) => ['button','a','input'].includes((el.tagName||'').toLowerCase()) &&
+                    ((el.textContent||'').toLowerCase().includes('create chart') || (el.value||'').toLowerCase().includes('create chart'));
+                const stack = [document];
+                while (stack.length) {
+                    const root = stack.pop();
+                    for (const el of root.querySelectorAll('button, a, input[type="submit"], input[type="button"]')) {
+                        if (matches(el)) return el;
+                    }
+                    const all = root.querySelectorAll('*');
+                    for (const el of all) {
+                        if (el.shadowRoot) stack.push(el.shadowRoot);
+                    }
+                }
+                return null;
+            };
+            const btn = findDeepButton();
+            if (!btn) return false;
+            const isDisabled = () => btn.disabled || btn.getAttribute('aria-disabled') === 'true' || btn.classList.contains('disabled');
+            let tries = 20;
+            while (tries-- > 0 && isDisabled()) {
+                await new Promise(r => setTimeout(r, 200));
+            }
+            if (isDisabled()) { btn.disabled = false; btn.removeAttribute('aria-disabled'); }
+            btn.scrollIntoView && btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            btn.click && btn.click();
+            return true;
+        }).catch(() => false);
+        if (didClick) { clicked = true; break; }
+    }
+
+    // Wait for navigation or XHR completion
+    try {
+        await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
+    } catch (e) {
+        await this.delay(5000);
+    }
+
+    // Best-effort timezone set
+    await this.page.evaluate((tz) => {
+        const el = document.querySelector('input[name="Timezone"], input[id*="timezone"], input[name*="timezone"]');
+        if (el) el.value = tz;
+    }, timezone);
+
+    return true;
+};
+
+/**
+ * Attempt to normalize captured JSON to our expected structure
+ */
+JovianArchivePuppeteerService.prototype.transformCapturedJson = function (json, birthData) {
+    try {
+        // Heuristics: look for property names related to chart content
+        const asString = JSON.stringify(json).toLowerCase();
+        const looksLikeChart = asString.includes('strategy') || asString.includes('authority') || asString.includes('profile');
+        if (!looksLikeChart) return null;
+
+        const out = {
+            chart_properties: {},
+            design_data: [],
+            personality_data: [],
+            chart_image_url: null,
+            download_data: null,
+        };
+
+        // Try common locations
+        const propsCandidates = [json.properties, json.chart_properties, json.result?.properties, json.data?.properties, json.data?.chart_properties];
+        for (const cand of propsCandidates) {
+            if (cand && typeof cand === 'object') {
+                for (const [k, v] of Object.entries(cand)) {
+                    out.chart_properties[String(k).toLowerCase().replace(/[^a-z0-9]/g, '_')] = String(v);
+                }
+                break;
+            }
+        }
+
+        const imgCandidates = [json.image, json.chart_image_url, json.data?.image, json.data?.chart_image_url];
+        for (const img of imgCandidates) {
+            if (typeof img === 'string') {
+                out.chart_image_url = img.startsWith('http') ? img : `https://www.jovianarchive.com${img}`;
+                break;
+            }
+        }
+
+        const dlCandidates = [json.download, json.download_data, json.data?.download, json.data?.download_data];
+        for (const dl of dlCandidates) {
+            if (typeof dl === 'string') { out.download_data = dl; break; }
+        }
+
+        return out;
+    } catch (_) {
+        return null;
+    }
+};
+
+/**
+ * Best-effort hCaptcha solver using 2Captcha (optional).
+ * Requires env HCAPTCHA_API_KEY; optionally HCAPTCHA_SITEKEY to override.
+ */
+JovianArchivePuppeteerService.prototype.solveHCaptchaIfPresent = async function () {
+    const apiKey = process.env.HCAPTCHA_API_KEY;
+    if (!apiKey) {
+        logger.info('HCAPTCHA_API_KEY not set; skipping captcha solving');
+        return;
+    }
+
+    // Try to detect sitekey on page, else fallback to known/site env
+    let sitekey = await this.page.evaluate(() => {
+        const iframe = Array.from(document.querySelectorAll('iframe'))
+            .find(f => (f.src || '').includes('hcaptcha.com')); 
+        if (iframe) {
+            const m = iframe.src.match(/sitekey=([^&]+)/);
+            if (m) return decodeURIComponent(m[1]);
+        }
+        const widget = document.querySelector('[data-sitekey]');
+        return widget ? widget.getAttribute('data-sitekey') : null;
+    });
+    if (!sitekey) {
+        sitekey = process.env.HCAPTCHA_SITEKEY || 'f06e6c50-85a8-45c8-87d0-21a2b65856fe';
+    }
+
+    const pageUrl = this.baseUrl;
+    logger.info('Attempting hCaptcha solve', { sitekey });
+
+    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+    const startUrl = `https://2captcha.com/in.php?key=${encodeURIComponent(apiKey)}&method=hcaptcha&json=1&sitekey=${encodeURIComponent(sitekey)}&pageurl=${encodeURIComponent(pageUrl)}`;
+    const startRes = await fetch(startUrl).then(r => r.json());
+    if (!startRes || startRes.status !== 1) {
+        throw new Error('2Captcha start failed');
+    }
+    const requestId = startRes.request;
+
+    // Poll for result
+    const pollUrl = `https://2captcha.com/res.php?key=${encodeURIComponent(apiKey)}&action=get&json=1&id=${encodeURIComponent(requestId)}`;
+    let token = null;
+    for (let i = 0; i < 24; i++) { // up to ~60s
+        await this.delay(2500);
+        const res = await fetch(pollUrl).then(r => r.json());
+        if (res.status === 1) { token = res.request; break; }
+        if (res.request && res.request !== 'CAPCHA_NOT_READY') {
+            logger.warn('2Captcha unexpected response', { request: res.request });
+        }
+    }
+    if (!token) {
+        throw new Error('2Captcha did not return a token in time');
+    }
+
+    await this.page.evaluate((captchaToken) => {
+        // Common places hCaptcha stores responses
+        const ta = document.querySelector('textarea[name="h-captcha-response"], textarea[id="g-recaptcha-response"]');
+        if (ta) { ta.value = captchaToken; ta.dispatchEvent(new Event('change', { bubbles: true })); }
+        if (window.hcaptcha && typeof window.hcaptcha.setResponse === 'function') {
+            try { window.hcaptcha.setResponse(captchaToken); } catch (e) {}
+        }
+    }, token);
+
+    logger.info('hCaptcha token injected');
+};
