@@ -139,12 +139,7 @@ class JovianArchivePuppeteerService {
         
         logger.info('Form page loaded successfully');
 
-        // Try to solve hCaptcha if enabled (optional)
-        try {
-            await this.solveHCaptchaIfPresent();
-        } catch (e) {
-            logger.warn('hCaptcha solving skipped or failed', { error: e.message });
-        }
+        // hCaptcha solving removed - using Maia Mechanics API instead
     }
 
     /**
@@ -1012,66 +1007,4 @@ JovianArchivePuppeteerService.prototype.transformCapturedJson = function (json, 
     }
 };
 
-/**
- * Best-effort hCaptcha solver using 2Captcha (optional).
- * Requires env HCAPTCHA_API_KEY; optionally HCAPTCHA_SITEKEY to override.
- */
-JovianArchivePuppeteerService.prototype.solveHCaptchaIfPresent = async function () {
-    const apiKey = process.env.HCAPTCHA_API_KEY;
-    if (!apiKey) {
-        logger.info('HCAPTCHA_API_KEY not set; skipping captcha solving');
-        return;
-    }
-
-    // Try to detect sitekey on page, else fallback to known/site env
-    let sitekey = await this.page.evaluate(() => {
-        const iframe = Array.from(document.querySelectorAll('iframe'))
-            .find(f => (f.src || '').includes('hcaptcha.com')); 
-        if (iframe) {
-            const m = iframe.src.match(/sitekey=([^&]+)/);
-            if (m) return decodeURIComponent(m[1]);
-        }
-        const widget = document.querySelector('[data-sitekey]');
-        return widget ? widget.getAttribute('data-sitekey') : null;
-    });
-    if (!sitekey) {
-        sitekey = process.env.HCAPTCHA_SITEKEY || 'f06e6c50-85a8-45c8-87d0-21a2b65856fe';
-    }
-
-    const pageUrl = this.baseUrl;
-    logger.info('Attempting hCaptcha solve', { sitekey });
-
-    const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
-    const startUrl = `https://2captcha.com/in.php?key=${encodeURIComponent(apiKey)}&method=hcaptcha&json=1&sitekey=${encodeURIComponent(sitekey)}&pageurl=${encodeURIComponent(pageUrl)}`;
-    const startRes = await fetch(startUrl).then(r => r.json());
-    if (!startRes || startRes.status !== 1) {
-        throw new Error('2Captcha start failed');
-    }
-    const requestId = startRes.request;
-
-    // Poll for result
-    const pollUrl = `https://2captcha.com/res.php?key=${encodeURIComponent(apiKey)}&action=get&json=1&id=${encodeURIComponent(requestId)}`;
-    let token = null;
-    for (let i = 0; i < 24; i++) { // up to ~60s
-        await this.delay(2500);
-        const res = await fetch(pollUrl).then(r => r.json());
-        if (res.status === 1) { token = res.request; break; }
-        if (res.request && res.request !== 'CAPCHA_NOT_READY') {
-            logger.warn('2Captcha unexpected response', { request: res.request });
-        }
-    }
-    if (!token) {
-        throw new Error('2Captcha did not return a token in time');
-    }
-
-    await this.page.evaluate((captchaToken) => {
-        // Common places hCaptcha stores responses
-        const ta = document.querySelector('textarea[name="h-captcha-response"], textarea[id="g-recaptcha-response"]');
-        if (ta) { ta.value = captchaToken; ta.dispatchEvent(new Event('change', { bubbles: true })); }
-        if (window.hcaptcha && typeof window.hcaptcha.setResponse === 'function') {
-            try { window.hcaptcha.setResponse(captchaToken); } catch (e) {}
-        }
-    }, token);
-
-    logger.info('hCaptcha token injected');
-};
+// hCaptcha solving removed - using Maia Mechanics API instead

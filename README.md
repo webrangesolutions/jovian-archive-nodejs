@@ -1,25 +1,27 @@
-# Jovian Archive Human Design Chart Scraper
+# Human Design Chart API
 
-A Node.js API service that generates Human Design charts by scraping data from the Jovian Archive website. This service provides a RESTful API to generate personalized Human Design charts based on birth data.
+A Node.js API service that generates Human Design charts using the Maia Mechanics API. This service provides a RESTful API to generate personalized Human Design charts based on birth data with comprehensive chart information and planetary activations.
 
 ## 🚀 Features
 
 - **Human Design Chart Generation**: Generate complete Human Design charts with personality and design data
-- **Multiple Scraping Methods**: Uses Puppeteer (primary), Axios (fallback), and node-fetch (secondary fallback)
-- **Anti-Bot Detection Bypass**: Successfully bypasses website anti-bot measures using headless browser automation
-- **Comprehensive Chart Data**: Extracts chart properties, design data, personality data, chart images, and download data
+- **Direct API Integration**: Uses Maia Mechanics API for reliable, fast chart generation
+- **No Captcha Required**: Direct API calls eliminate the need for captcha solving
+- **Comprehensive Chart Data**: Extracts chart properties, planetary activations, centers, channels, and gates
+- **Human-Readable Format**: Returns data with proper labels, planet names, and directional arrows
 - **RESTful API**: Clean JSON API with proper error handling and validation
 - **Multiple Endpoints**: Supports both POST and GET requests for chart generation
+- **Fallback Support**: Puppeteer/axios/fetch fallbacks if Maia API fails
 - **Security Features**: Rate limiting, CORS protection, helmet security headers, and input validation
 - **Logging**: Comprehensive logging with Winston for debugging and monitoring
 - **Production Ready**: Optimized for deployment on Render.com and other cloud platforms
 
 ## 📋 Prerequisites
 
-- Node.js (v18 or higher) - Required for Puppeteer compatibility
+- Node.js (v18 or higher)
 - npm or yarn
-- Internet connection (for scraping Jovian Archive)
-- Chrome/Chromium browser (for Puppeteer functionality)
+- Internet connection (for Maia Mechanics API)
+- Maia Mechanics API token (for primary functionality)
 
 ## 🛠️ Installation
 
@@ -45,11 +47,9 @@ A Node.js API service that generates Human Design charts by scraping data from t
    PORT=3000
    NODE_ENV=development
    
-   # JovianArchive Configuration
-   JOVIAN_ARCHIVE_URL=https://www.jovianarchive.com/Get_Your_Chart
-   JOVIAN_ARCHIVE_MAX_RETRIES=3
-   JOVIAN_ARCHIVE_SCRAPING_DELAY=2000
-   JOVIAN_ARCHIVE_RATE_LIMIT_PER_MINUTE=10
+   # Maia Mechanics API Configuration
+   MAIA_CALCULATOR_TOKEN=your_maia_mechanics_token_here
+   MAIA_EV_PAYLOAD=optional_ev_payload_if_needed
    
    # Logging
    LOG_LEVEL=info
@@ -170,41 +170,66 @@ Generate a Human Design chart from birth data.
 ```json
 {
   "success": true,
-  "message": "Chart generated successfully",
+  "message": "Chart generated successfully using Maia Mechanics API",
   "data": {
     "birth_data": {
       "name": "John Smith",
-      "day": 15,
-      "month": 6,
-      "year": 1990,
-      "hour": 14,
-      "minute": 30,
-      "country": "Pakistan",
-      "city": "Peshawar",
-      "timezone_utc": false
+      "date_local": "June 15, 1990, 2:30 PM PKT",
+      "date_utc": "June 15, 1990, 9:30 AM UTC",
+      "location": {
+        "city": "Peshawar",
+        "country": "Pakistan"
+      }
     },
-    "chart_properties": {
-      "type": "Manifesting Generator",
-      "strategy": "To Respond",
-      "not_self_theme": "Frustration",
-      "inner_authority": "Sacral",
-      "profile": "2 / 4",
-      "definition": "Single Definition",
-      "incarnation_cross": "Right Angle Cross of Eden (12/11 | 36/6)",
-      "birth_date__local_": "Jun, 15 1990, 14",
-      "birth_place": "Peshawar (Khyber Pakhtunkhwa),Pakistan",
-      "name": "John Smith"
+    "properties": {
+      "type": "Manifestor",
+      "strategy": "Inform",
+      "signature": "Peace",
+      "not_self_theme": "Anger",
+      "authority": "Sacral",
+      "definition": "Single",
+      "incarnation_cross": "Cross 137",
+      "profile": "2/4",
+      "variable": "Variable 10"
     },
-    "design_data": [
-      "Share: DOWNLOAD",
-      "Share:",
-      "DOWNLOAD"
-    ],
-    "personality_data": [],
-    "chart_image_url": "https://www.jovianarchive.com/content/charts/627810390000000000_.png",
-    "download_data": "eyJOYW1lIjoiSm9obiBTbWl0aCI...",
-    "generated_at": "2025-09-12T09:01:47.416Z"
-  }
+    "chart_data": {
+      "centers": [1, 2, 0, 1, 1, 2, 2, 1, 1],
+      "channels": [28, 11],
+      "gates": ["1:2", "2:1", "6:0", "7:0", "11:1", "12:1", "13:0", "14:0", "15:0", "19:2", "20:1", "21:1", "33:1", "36:0", "38:2", "41:0", "53:1", "58:2", "61:2", "63:1"],
+      "design_activations": [
+        "Sun 12.2 ▲",
+        "Earth 11.2 ▲",
+        "Moon 63.3 ▲",
+        "North Node 19.1 ▲",
+        "South Node 33.1 ▲",
+        "Mercury 20.6 ▲",
+        "Venus 2.6 ▲",
+        "Mars 21.2 ▲",
+        "Jupiter 53.1 ▲",
+        "Saturn 61.4 ▲",
+        "Uranus 58.5 ▲",
+        "Neptune 38.5 ▲",
+        "Pluto 1.3 ▲"
+      ],
+      "personality_activations": [
+        "Sun 36.4 ▲",
+        "Earth 6.4 ▲",
+        "Moon 14.2 ▲",
+        "North Node 13.3 ▲",
+        "South Node 7.3 ▲",
+        "Mercury 36.2 ▲",
+        "Venus 19.3 ▲",
+        "Mars 41.3 ▲",
+        "Jupiter 15.4 ▲",
+        "Saturn 61.3 ▲",
+        "Uranus 58.6 ▲",
+        "Neptune 38.6 ▲",
+        "Pluto 1.5 ▲"
+      ]
+    },
+    "raw_data": { /* original Maia Mechanics API response */ }
+  },
+  "source": "maia_mechanics"
 }
 ```
 
@@ -329,9 +354,10 @@ generate_chart()
 ### Service Architecture
 The application uses a multi-layered architecture with fallback mechanisms:
 
-1. **Primary**: `JovianArchivePuppeteerService` - Uses Puppeteer for headless browser automation
-2. **Fallback 1**: `JovianArchiveService` - Uses Axios for HTTP requests
-3. **Fallback 2**: `JovianArchiveFetchService` - Uses node-fetch for HTTP requests
+1. **Primary**: `MaiaMechanicsApiService` - Direct API integration with Maia Mechanics
+2. **Fallback 1**: `JovianArchivePuppeteerService` - Uses Puppeteer for headless browser automation
+3. **Fallback 2**: `JovianArchiveService` - Uses Axios for HTTP requests
+4. **Fallback 3**: `JovianArchiveFetchService` - Uses node-fetch for HTTP requests
 
 ### Directory Structure
 ```
@@ -345,9 +371,10 @@ jovian-archive-nodejs/
 │   ├── routes/
 │   │   └── chartRoutes.js     # API routes
 │   ├── services/
-│   │   ├── JovianArchiveService.js        # Axios-based scraper
-│   │   ├── JovianArchivePuppeteerService.js # Puppeteer-based scraper
-│   │   └── JovianArchiveFetchService.js   # node-fetch-based scraper
+│   │   ├── MaiaMechanicsApiService.js      # Maia Mechanics API integration
+│   │   ├── JovianArchiveService.js        # Axios-based scraper (fallback)
+│   │   ├── JovianArchivePuppeteerService.js # Puppeteer-based scraper (fallback)
+│   │   └── JovianArchiveFetchService.js   # node-fetch-based scraper (fallback)
 │   └── utils/
 │       └── logger.js          # Winston logger configuration
 ├── logs/                      # Application logs
@@ -428,24 +455,35 @@ curl -X POST http://localhost:3000/api/generate-chart \
 
 ## 📊 Response Data Structure
 
-### Chart Properties
-The `chart_properties` object contains:
-- `type`: Human Design type (Generator, Manifesting Generator, Projector, etc.)
-- `strategy`: Life strategy
-- `not_self_theme`: Not-self theme
-- `inner_authority`: Inner authority
-- `profile`: Profile (e.g., "2 / 4")
-- `definition`: Definition type
-- `incarnation_cross`: Incarnation cross
-- `birth_date__local_`: Formatted birth date
-- `birth_place`: Birth location
+### Birth Data
+The `birth_data` object contains:
 - `name`: Person's name
+- `date_local`: Formatted local birth date and time
+- `date_utc`: Formatted UTC birth date and time
+- `location`: Birth location with city and country
 
-### Chart Image
-The `chart_image_url` provides a direct link to the generated chart image.
+### Properties
+The `properties` object contains:
+- `type`: Human Design type (Generator, Manifestor, Projector, Reflector, Manifesting Generator)
+- `strategy`: Life strategy (Wait to Respond, Inform, Wait for Invitation, etc.)
+- `signature`: Signature (Satisfaction, Peace, Success, Surprise)
+- `not_self_theme`: Not-self theme (Frustration, Anger, Bitterness, Disappointment)
+- `authority`: Inner authority (Sacral, Emotional Solar Plexus, Splenic, etc.)
+- `definition`: Definition type (Single, Split, Triple Split, Quadruple Split)
+- `incarnation_cross`: Incarnation cross (e.g., "Cross 137")
+- `profile`: Profile (e.g., "2/4")
+- `variable`: Variable information
 
-### Download Data
-The `download_data` field contains base64-encoded data for downloading the chart.
+### Chart Data
+The `chart_data` object contains:
+- `centers`: Array of center states (0=undefined, 1=defined, 2=defined)
+- `channels`: Array of defined channels
+- `gates`: Array of gates with modes (e.g., "1:2", "2:1")
+- `design_activations`: Array of design planetary activations with planet names and arrows
+- `personality_activations`: Array of personality planetary activations with planet names and arrows
+
+### Raw Data
+The `raw_data` field contains the original Maia Mechanics API response for advanced use.
 
 ## 🔒 Security Considerations
 
@@ -454,16 +492,16 @@ The `download_data` field contains base64-encoded data for downloading the chart
 - **Security Headers**: Helmet.js provides security headers
 - **Input Validation**: Joi validation for request data
 - **Error Handling**: Comprehensive error handling without exposing sensitive information
-- **Respectful Scraping**: Implements proper delays between requests
-- **Terms of Service**: The service respects the target website's terms of service
-- **Realistic Behavior**: Uses realistic browser headers and behavior patterns
+- **API Integration**: Uses official Maia Mechanics API for reliable data access
+- **Terms of Service**: The service complies with Maia Mechanics API terms of service
+- **Fallback Mechanisms**: Graceful fallback to website scraping if API fails
 
 ## 📦 Dependencies
 
 ### Core Dependencies
 - **express**: Web framework for Node.js
-- **puppeteer**: Headless Chrome automation for web scraping
-- **axios**: HTTP client for API requests
+- **axios**: HTTP client for Maia Mechanics API and fallback requests
+- **puppeteer**: Headless Chrome automation for fallback scraping
 - **node-fetch**: Lightweight HTTP client (fallback)
 - **cheerio**: Server-side jQuery implementation for HTML parsing
 - **winston**: Logging library
@@ -480,7 +518,7 @@ The `download_data` field contains base64-encoded data for downloading the chart
 
 ## 📝 License
 
-This project is for educational and personal use. Please respect the Jovian Archive website's terms of service and robots.txt file.
+This project is for educational and personal use. Please respect the Maia Mechanics API terms of service and use the service responsibly.
 
 ## 🤝 Contributing
 
@@ -504,4 +542,4 @@ For issues and questions:
 
 ---
 
-**Note**: This service is designed to work with the Jovian Archive website. Please ensure you comply with their terms of service and use the service responsibly.
+**Note**: This service is designed to work with the Maia Mechanics API for Human Design chart generation. Please ensure you comply with their terms of service and use the service responsibly.

@@ -1,6 +1,7 @@
 const JovianArchiveService = require('../services/JovianArchiveService');
 const JovianArchivePuppeteerService = require('../services/JovianArchivePuppeteerService');
 const JovianArchiveFetchService = require('../services/JovianArchiveFetchService');
+const MaiaMechanicsApiService = require('../services/MaiaMechanicsApiService');
 const logger = require('../utils/logger');
 
 class ChartController {
@@ -8,6 +9,7 @@ class ChartController {
         this.jovianArchiveService = new JovianArchiveService();
         this.jovianArchivePuppeteerService = new JovianArchivePuppeteerService();
         this.jovianArchiveFetchService = new JovianArchiveFetchService();
+        this.maiaMechanicsApiService = new MaiaMechanicsApiService();
     }
 
     /**
@@ -20,6 +22,23 @@ class ChartController {
             console.log("Parsed birthData:", birthData);
 
             logger.info('Chart generation request received', { birthData });
+
+            // Try Maia Mechanics API first (no captcha, server-side)
+            try {
+                const maia = await this.maiaMechanicsApiService.submitBirthData(birthData);
+                if (maia.success && maia.data && (maia.data.chart || maia.data.meta)) {
+                    // Transform to readable format
+                    const readableData = this.transformToReadableFormat(maia.data, birthData);
+                    return res.status(200).json({
+                        success: true,
+                        message: 'Chart generated successfully using Maia Mechanics API',
+                        data: readableData,
+                        source: 'maia_mechanics'
+                    });
+                }
+            } catch (e) {
+                // continue to other methods
+            }
 
             // Try Puppeteer service first (more reliable)
             const result = await this.jovianArchivePuppeteerService.submitBirthData(birthData);
@@ -176,6 +195,23 @@ class ChartController {
 
             logger.info('Chart generation request received (GET)', { birthData });
 
+            // Try Maia Mechanics API first (GET)
+            try {
+                const maia = await this.maiaMechanicsApiService.submitBirthData(birthData);
+                if (maia.success && maia.data && (maia.data.chart || maia.data.meta)) {
+                    // Transform to readable format
+                    const readableData = this.transformToReadableFormat(maia.data, birthData);
+                    return res.status(200).json({
+                        success: true,
+                        message: 'Chart generated successfully using Maia Mechanics API',
+                        data: readableData,
+                        source: 'maia_mechanics'
+                    });
+                }
+            } catch (e) {
+                // continue
+            }
+
             // Try Puppeteer service first (more reliable)
             const result = await this.jovianArchivePuppeteerService.submitBirthData(birthData);
 
@@ -290,6 +326,166 @@ class ChartController {
                 error: error.message,
             });
         }
+    }
+
+    /**
+     * Transform Maia Mechanics API data to readable format
+     */
+    transformToReadableFormat(apiData, birthData) {
+        const chart = apiData.chart || {};
+        const meta = apiData.meta || {};
+        const birthDataMeta = meta.birthData || {};
+
+        // Type mappings
+        const typeMap = {
+            0: 'Generator',
+            1: 'Manifestor', 
+            2: 'Projector',
+            3: 'Reflector',
+            4: 'Manifesting Generator'
+        };
+
+        // Strategy mappings by type
+        const strategyMap = {
+            0: 'Wait to Respond',
+            1: 'Inform',
+            2: 'Wait for Invitation', 
+            3: 'Wait a Lunar Cycle',
+            4: 'Wait to Respond'
+        };
+
+        // Not-Self Theme mappings by type
+        const notSelfThemeMap = {
+            0: 'Frustration',
+            1: 'Anger',
+            2: 'Bitterness',
+            3: 'Disappointment',
+            4: 'Frustration'
+        };
+
+        // Authority mappings
+        const authorityMap = {
+            0: 'None/Environmental',
+            1: 'Sacral',
+            2: 'Emotional Solar Plexus',
+            3: 'Splenic',
+            4: 'Ego',
+            5: 'Self-Projected',
+            6: 'Lunar'
+        };
+
+        // Definition mappings
+        const definitionMap = {
+            0: 'Single',
+            1: 'Split', 
+            2: 'Triple Split',
+            3: 'Quadruple Split'
+        };
+
+        // Profile formatting
+        const formatProfile = (profile) => {
+            if (typeof profile === 'number') {
+                const first = Math.floor(profile / 10);
+                const second = profile % 10;
+                return `${first}/${second}`;
+            }
+            return profile;
+        };
+
+        // Format time
+        const formatTime = (timeStr) => {
+            if (!timeStr) return null;
+            try {
+                const date = new Date(timeStr);
+                return date.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZoneName: 'short'
+                });
+            } catch (e) {
+                return timeStr;
+            }
+        };
+
+        // Planet mappings
+        const planetMap = {
+            0: 'Sun',
+            1: 'Earth', 
+            2: 'Moon',
+            3: 'North Node',
+            4: 'South Node',
+            5: 'Mercury',
+            6: 'Venus',
+            7: 'Mars',
+            8: 'Jupiter',
+            9: 'Saturn',
+            10: 'Uranus',
+            11: 'Neptune',
+            12: 'Pluto'
+        };
+
+        // Extract planetary activations with planet names and arrows
+        const extractPlanetaryActivations = (planets) => {
+            if (!Array.isArray(planets)) return { design: [], personality: [] };
+            
+            const design = [];
+            const personality = [];
+            
+            planets.forEach(planet => {
+                const gateLine = `${planet.gate}.${planet.line}`;
+                const planetName = planetMap[planet.id] || `Planet ${planet.id}`;
+                const arrow = planet.baseAlignment === 2 ? '▼' : '▲';
+                const activation = planet.activation === 1 ? 'Design' : 'Personality';
+                
+                const formatted = `${planetName} ${gateLine} ${arrow}`;
+                
+                if (activation === 'Design') {
+                    design.push(formatted);
+                } else {
+                    personality.push(formatted);
+                }
+            });
+            
+            return { design, personality };
+        };
+
+        const planetaryActivations = extractPlanetaryActivations(chart.planets || []);
+
+        return {
+            birth_data: {
+                name: birthData.name || meta.name || 'Unknown',
+                date_local: formatTime(birthDataMeta.time?.local),
+                date_utc: formatTime(birthDataMeta.time?.utc),
+                location: {
+                    city: birthData.city || birthDataMeta.location?.city,
+                    country: birthData.country || birthDataMeta.location?.country
+                }
+            },
+            properties: {
+                type: typeMap[chart.type] || 'Unknown',
+                strategy: strategyMap[chart.type] || 'Unknown',
+                signature: chart.type === 0 || chart.type === 4 ? 'Satisfaction' : 
+                          chart.type === 1 ? 'Peace' :
+                          chart.type === 2 ? 'Success' : 'Surprise',
+                not_self_theme: notSelfThemeMap[chart.type] || 'Unknown',
+                authority: authorityMap[chart.authority] || 'Unknown',
+                definition: definitionMap[chart.definition] || 'Unknown',
+                incarnation_cross: `Cross ${chart.cross}`,
+                profile: formatProfile(chart.profile),
+                variable: chart.variable ? `Variable ${chart.variable}` : 'Unknown'
+            },
+            chart_data: {
+                centers: chart.centers || [],
+                channels: chart.channels || [],
+                gates: (chart.gates || []).map(g => `${g.gate}:${g.mode}`),
+                design_activations: planetaryActivations.design,
+                personality_activations: planetaryActivations.personality
+            },
+            raw_data: apiData // Keep original for advanced use
+        };
     }
 }
 
