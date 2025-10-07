@@ -35,9 +35,18 @@ class ChartController {
                         data: readableData,
                         source: 'maia_mechanics'
                     });
+                } else {
+                    logger.warn('Maia Mechanics API returned unsuccessful response', { 
+                        success: maia.success, 
+                        hasData: !!maia.data,
+                        dataKeys: maia.data ? Object.keys(maia.data) : []
+                    });
                 }
             } catch (e) {
-                // continue to other methods
+                logger.error('Maia Mechanics API failed, falling back to other methods', { 
+                    error: e.message,
+                    stack: e.stack?.substring(0, 200)
+                });
             }
 
             // Try Puppeteer service first (more reliable)
@@ -207,9 +216,18 @@ class ChartController {
                         data: readableData,
                         source: 'maia_mechanics'
                     });
+                } else {
+                    logger.warn('Maia Mechanics API returned unsuccessful response (GET)', { 
+                        success: maia.success, 
+                        hasData: !!maia.data,
+                        dataKeys: maia.data ? Object.keys(maia.data) : []
+                    });
                 }
             } catch (e) {
-                // continue
+                logger.error('Maia Mechanics API failed (GET), falling back to other methods', { 
+                    error: e.message,
+                    stack: e.stack?.substring(0, 200)
+                });
             }
 
             // Try Puppeteer service first (more reliable)

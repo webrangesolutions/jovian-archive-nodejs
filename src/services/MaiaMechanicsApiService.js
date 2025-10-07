@@ -10,8 +10,14 @@ class MaiaMechanicsApiService {
     async submitBirthData(birthData) {
         try {
             if (!this.calculatorToken) {
+                logger.error('MAIA_CALCULATOR_TOKEN is not set in environment variables');
                 throw new Error('MAIA_CALCULATOR_TOKEN is not set');
             }
+            
+            logger.info('Maia Mechanics API: Starting chart generation', { 
+                hasToken: !!this.calculatorToken,
+                tokenLength: this.calculatorToken.length 
+            });
 
             const { name, email, day, month, year, hour, minute } = birthData;
             const countryName = birthData.country || '';
@@ -53,7 +59,10 @@ class MaiaMechanicsApiService {
                 payload.data.evPayload = process.env.MAIA_EV_PAYLOAD;
             }
 
-            logger.info('Calling Maia Mechanics API', { url: this.baseUrl });
+            logger.info('Maia Mechanics API: Making request', { 
+                url: this.baseUrl,
+                payload: JSON.stringify(payload).substring(0, 200) + '...'
+            });
 
             const response = await axios.post(this.baseUrl, payload, {
                 timeout: 60000,
@@ -66,6 +75,12 @@ class MaiaMechanicsApiService {
                     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
                 },
                 validateStatus: (s) => s >= 200 && s < 300,
+            });
+
+            logger.info('Maia Mechanics API: Response received', { 
+                status: response.status,
+                hasData: !!response.data,
+                dataKeys: response.data ? Object.keys(response.data) : []
             });
 
             const apiData = response.data || {};
